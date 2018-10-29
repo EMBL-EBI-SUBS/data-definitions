@@ -1,0 +1,12 @@
+{
+    "_id" : "sequencingSubmissions",
+    "displayName" : "Sequencing",
+    "description" : "This submission plan describes the list of required data types for a sequencing submission.",
+    "dataTypeIds" : [ 
+        "projects", 
+        "samples", 
+        "enaStudies", 
+        "sequencingExperiments", 
+        "sequencingRuns"
+    ]
+}

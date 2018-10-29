@@ -1,0 +1,11 @@
+{
+    "_id" : "variantCallSubmissions",
+    "displayName" : "Variant calls",
+    "description" : "This submission plan describes the list of required data types for a variant call submission.",
+    "dataTypeIds" : [ 
+        "projects", 
+        "samples", 
+        "enaStudies", 
+        "variantCalls"
+    ]
+}
