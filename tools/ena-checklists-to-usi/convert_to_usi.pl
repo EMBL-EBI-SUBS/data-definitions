@@ -20,10 +20,9 @@ my $template      = checklist_2_template($ena_checklist);
 
 my $usi_checklist = {
     _id         => $ena_checklist->{IDENTIFIERS}{PRIMARY_ID},
-    dataTypeId  => 'samples',
-    displayName => $ena_checklist->{DESCRIPTOR}{LABEL},
-    description => $ena_checklist->{DESCRIPTOR}{DESCRIPTION},
-
+	dataTypeId  => 'samples',
+	displayName => $ena_checklist->{DESCRIPTOR}{LABEL},
+	description => $ena_checklist->{DESCRIPTOR}{DESCRIPTION},
     validationSchema    => $schema,
     spreadsheetTemplate => $template
 };
@@ -64,7 +63,7 @@ sub checkist_2_schema {
 
         my $fields = $field_group->{FIELD};
 
-        my $required_attributes = $schema->{properties}{attributes}{required};
+        my $required_attributes = [];
 
         if ( ref $fields eq 'HASH' ) {
             $fields = [$fields];
@@ -79,6 +78,7 @@ sub checkist_2_schema {
             push @$required_attributes, $field_name if ($required);
         }
 
+        push @{$schema->{properties}{attributes}{required}}, flat($required_attributes);
     }
 
     return $schema;
@@ -200,7 +200,8 @@ sub convert_field {
     my $field_type = $field->{FIELD_TYPE};
     my $units      = $field->{UNITS};
 
-    my $required = ( $mandatory eq 'mandatory' );
+    my $required =
+              ( $field->{MANDATORY} eq 'mandatory' ) ? $true : $false;
 
     my $field_schema = { description => $description, };
 
@@ -387,3 +388,6 @@ sub print_as_json {
     }
 }
 
+sub flat {  # no prototype for this one to avoid warnings
+    return map { ref eq 'ARRAY' ? flat(@$_) : $_ } @_;
+}
