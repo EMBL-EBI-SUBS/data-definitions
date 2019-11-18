@@ -18,18 +18,8 @@ my ($accession) = @ARGV;
 
 my $ena_checklist = load_checklist($accession);
 my $schema        = checkist_2_schema($ena_checklist);
-my $template      = checklist_2_template($ena_checklist);
 
-my $usi_checklist = {
-    _id         => $ena_checklist->{IDENTIFIERS}{PRIMARY_ID},
-	dataTypeId  => 'samples',
-	displayName => $ena_checklist->{DESCRIPTOR}{LABEL},
-	description => $ena_checklist->{DESCRIPTOR}{DESCRIPTION},
-    validationSchema    => $schema,
-    spreadsheetTemplate => $template
-};
-
-print_as_json($usi_checklist);
+print(JSON->new->pretty->encode($schema));
 
 sub load_checklist {
     my ($accession) = @_;
@@ -74,6 +64,7 @@ sub checkist_2_schema {
         for my $field (@$fields) {
             my ( $field_name, $field_schema, $required ) =
               convert_field($field);
+
             $schema->{properties}{attributes}{properties}{$field_name} =
               $field_schema;
 
@@ -84,111 +75,6 @@ sub checkist_2_schema {
     }
 
     return $schema;
-}
-
-sub field_capture {
-    my ( $fieldName, $required, $fieldType ) = @_;
-    my %capture_def = (
-        "_class"    => "uk.ac.ebi.subs.repository.model.templates.FieldCapture",
-        "fieldName" => undef,
-        "fieldType" => "String",
-        "required"  => $false
-    );
-    $capture_def{fieldName} = $fieldName;
-    $capture_def{required}  = $required if defined $required;
-    $capture_def{fieldType} = $fieldType if defined $fieldType;
-    return \%capture_def;
-}
-
-sub date_field_capture {
-    my ( $fieldName, $required) = @_;
-    my %capture_def = (
-        "_class"    => "uk.ac.ebi.subs.repository.model.templates.DateFieldCapture",
-        "fieldName" => undef,
-        "required"  => $false
-    );
-    $capture_def{fieldName} = $fieldName;
-    $capture_def{required}  = $required if defined $required;
-    return \%capture_def;
-}
-
-sub attribute_capture {
-    my ( $required, $allow_units, $allow_terms ) = @_;
-    my %attr_capture = (
-        "_class" =>
-          "uk.ac.ebi.subs.repository.model.templates.AttributeCapture",
-        "required"   => $false,
-        "allowUnits" => $false,
-        "allowTerms" => $false
-    );
-
-    $attr_capture{required}   = $required    if defined $required;
-    $attr_capture{allowUnits} = $allow_units if defined $allow_units;
-    $attr_capture{allowTerms} = $allow_terms if defined $allow_terms;
-
-    return \%attr_capture;
-
-}
-
-sub checklist_2_template {
-    my ($checklist) = @_;
-
-    my @columnCaptures = (
-        { key => "alias", value => field_capture( 'alias', $true ) },
-        { key => "title", value => field_capture( 'title', $true ) },
-        {
-            key   => "description",
-            value => field_capture( 'description', $false )
-        },
-        {
-            key   => "release date",
-            value => date_field_capture( 'releaseDate', $true )
-        },
-        { key => "taxon", value => field_capture( 'taxon', $true ) },
-        {
-            key   => "taxon id",
-            value => field_capture( 'taxonId', $true, 'IntegerNumber' )
-        }
-    );
-
-    my $template = {
-        "columnCaptures" => \@columnCaptures,
-        "defaultCapture" => attribute_capture()
-    };
-
-    my $field_groups = $checklist->{DESCRIPTOR}{FIELD_GROUP};
-
-    for my $field_group (@$field_groups) {
-
-        my $field_group_name = $field_group->{NAME};
-
-        my $fields = $field_group->{FIELD};
-
-        if ( ref $fields eq 'HASH' ) {
-            $fields = [$fields];
-        }
-
-        for my $field (@$fields) {
-            my $name = $field->{NAME};
-            my $required =
-              ( $field->{MANDATORY} eq 'mandatory' ) ? $true : $false;
-
-            my $capture = attribute_capture($required);
-
-            $capture->{description} = $field->{DESCRIPTION}
-              if defined $field->{DESCRIPTION};
-
-
-        # we represent column captures as an array of objects,
-        # but we will reshape it to an object in the print method,
-        # because the order matters and perl cannot preserve key order
-              
-            push @columnCaptures, { key => $name, value => $capture };
-        }
-
-    }
-
-    return $template;
 }
 
 sub convert_field {
@@ -322,9 +208,9 @@ sub initial_schema {
     my $authority   = $descriptor->{AUTHORITY};
 
     my $schema = {
-        "id"             => "$accession",
-        '#dollar#schema' => "http://json-schema.org/draft-07/schema#",
-        '#dollar#async'  => $true,
+        '$id'             => "$accession",
+        '$schema' => "http://json-schema.org/draft-07/schema#",
+        '$async'  => $true,
         "description"    => $description,
         "version"        => "1.0.0",
         "author"         => $authority,
@@ -352,7 +238,7 @@ sub initial_schema {
                     "properties" => {
                         "value" => { "type" => "string", "minLength" => 1 },
                         "units" => { "type" => "string", "minLength" => 1 },
-                        "terms" => { '#dollar#ref' => "#/definitions/terms" }
+                        "terms" => { '$ref' => "#/definitions/terms" }
                     },
                     "required" => ["value"]
                 }
@@ -364,7 +250,7 @@ sub initial_schema {
                     "properties"  => {},
                     "required"    => [],
                     "patternProperties" => {
-                        '^#dot#*$' => { '#dollar#ref' => "#/definitions/attribute" }
+                        '^.*$' => { '$ref' => "#/definitions/attribute" }
                     }
                 }
             }
@@ -372,29 +258,6 @@ sub initial_schema {
     };
 
     return $schema;
-}
-
-sub print_as_json {
-    my ($thing) = @_;
-    my $json = encode_json($thing);
-
-
-    # the ordering of column captures matters, but perl can't preserve it, so we use jq 
-    # to restructure the document into it's final form
-    # This method receives column captures as an array of objects, with the keys 'key' and value
-    # jq remaps them to be one object, with the k/v pairs in the same order as the array
-    
-
-    my $pid = open2( \*CHILD_OUT, \*CHILD_IN,
-'jq \'.spreadsheetTemplate.columnCaptures = reduce .spreadsheetTemplate.columnCaptures[] as $i ({}; .[$i.key] = $i.value)\''
-    ) or die "open2() failed $!";
-
-    print CHILD_IN $json;
-    close CHILD_IN;
-
-    while (<CHILD_OUT>) {
-        print STDOUT $_ . $/;
-    }
 }
 
 sub flat {  # no prototype for this one to avoid warnings
